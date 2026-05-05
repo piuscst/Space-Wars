@@ -40,6 +40,8 @@ class Main extends Phaser.Scene {
         this.load.audio("sfxPlayerHurt", "player_hurt.mp3")
         this.load.audio("shootSFX", "gun_sfx.mp3")
         this.load.audio("bgMusic", "bg_music.mp3")
+        this.load.audio("gunUnlock", "gun_unlock.mp3")
+        this.load.audio("upgradeSFX", "upgrade_sfx.mp3")
     }
 
     create() {
@@ -80,7 +82,7 @@ class Main extends Phaser.Scene {
         this.scoreTimers = []
         this.upgrades = {fireRateDelta: 0, damageDelta: 0, speedDelta: 0}
 
-        this.debug = true
+        this.debug = false
 
         // Text for wave, HP, and score
         this.waveText  = this.add.text(400, 20, "", { fontFamily: 'Creepster', fontSize: "50px", fill: "#ffffff" }).setOrigin(0.5, 0).setAlpha(0)
@@ -111,9 +113,11 @@ class Main extends Phaser.Scene {
         this.sfxPlayerDie = this.sound.add("sfxPlayerDie", { volume: 0.8 })
         this.sfxPlayerHurt = this.sound.add("sfxPlayerHurt", { volume: 0.8 })
         this.sfxShoot = this.sound.add("shootSFX", { volume: 0.6 })
+        this.sfxUpgrade = this.sound.add("upgradeSFX", { volume: 0.6})
+        this.gunUnlock = this.sound.add("gunUnlock", { volume: 0.6})
 
         // BG Music
-        this.bgMusic = this.sound.add("bgMusic", { volume: 0.6, loop: true })
+        this.bgMusic = this.sound.add("bgMusic", { volume: 0.3, loop: true })
         this.bgMusic.play()
     }
 
@@ -139,6 +143,7 @@ class Main extends Phaser.Scene {
             }).setOrigin(0.5).setAlpha(0)
             this.fadeIn(text, 0)
             this.time.delayedCall(3000, () => text.destroy())
+            this.gunUnlock.play()
             this.unlockedWeaponsText.setText("Weapons: Pistol (1), Shotgun (2)")
         }
 
@@ -149,21 +154,25 @@ class Main extends Phaser.Scene {
             }).setOrigin(0.5).setAlpha(0)
             this.fadeIn(text, 0)
             this.time.delayedCall(3000, () => text.destroy())
+            this.gunUnlock.play()
             this.unlockedWeaponsText.setText("Weapons: Pistol (1), Shotgun (2), Rifle (3)")
         }
 
-        const maxZombieCount = 20
-        const zombieCount = 3 + Math.min(Math.floor(this.wave * 1.2) , maxZombieCount) // Slow ramp up in difficulty (zombies count)
+        const maxZombieCount = Math.min(10 + Math.floor(this.wave * 0.5), 35)
 
         const lanes = [100, 200, 300, 400, 500, 600, 700] // Array for each lane that the zombies can spawn in
 
         // For loop to spawn random enemies in, with a random x, and pushing it to the enemies array
-        for (let i = 0; i < zombieCount; i++) {
+        for (let i = 0; i < maxZombieCount; i++) {
             const x = lanes[Phaser.Math.Between(0, lanes.length - 1)] // Pick a random index between 0 and lanes.length - 1
             const y = -5 - (i * 20) // y Offset between zombies in the same lane
             const enemy = this.pickEnemy() // Pick the enemy to spawn
-            this.enemies.push(enemy(this, x, y)) // Push the enemy and their x and y coords
+             this.enemies.push(enemy(this, x, y, this.hpScale())) // Push the enemy and their x and y coords and hpScale
         }
+    }
+
+    hpScale() {
+        return Math.floor(this.wave / 5)  // +1 HP every 5 waves
     }
 
     pickEnemy() {
@@ -171,32 +180,32 @@ class Main extends Phaser.Scene {
 
         if (this.wave < 3) {
             // Only normal zombies early on
-            return (scene, x, y) => new NormalZombie(scene, x, y)
+            return (scene, x, y, hpBonus) => new NormalZombie(scene, x, y, hpBonus)
 
         } else if (this.wave < 7) {
             // Introduce gun zombies
-            if (roll > 75) return (scene, x, y) => new GunZombie(scene, x, y)
-            else           return (scene, x, y) => new NormalZombie(scene, x, y)
+            if (roll > 75) return (scene, x, y, hpBonus) => new GunZombie(scene, x, y, hpBonus)
+            else           return (scene, x, y, hpBonus) => new NormalZombie(scene, x, y, hpBonus)
 
         } else if (this.wave < 12) {
             // Introduce rifle zombies, gun zombies more common
-            if (roll > 90)      return (scene, x, y) => new RifleZombie(scene, x, y)
-            else if (roll > 65) return (scene, x, y) => new GunZombie(scene, x, y)
-            else                return (scene, x, y) => new NormalZombie(scene, x, y)
+            if (roll > 90)      return (scene, x, y, hpBonus) => new RifleZombie(scene, x, y, hpBonus)
+            else if (roll > 65) return (scene, x, y, hpBonus) => new GunZombie(scene, x, y, hpBonus)
+            else                return (scene, x, y, hpBonus) => new NormalZombie(scene, x, y, hpBonus)
 
         } else if (this.wave < 18) {
             // Tanks start appearing, rifle zombies more common
-            if (roll > 92)      return (scene, x, y) => new TankZombie(scene, x, y)
-            else if (roll > 78) return (scene, x, y) => new RifleZombie(scene, x, y)
-            else if (roll > 55) return (scene, x, y) => new GunZombie(scene, x, y)
-            else                return (scene, x, y) => new NormalZombie(scene, x, y)
+            if (roll > 92)      return (scene, x, y, hpBonus) => new TankZombie(scene, x, y, hpBonus)
+            else if (roll > 78) return (scene, x, y, hpBonus) => new RifleZombie(scene, x, y, hpBonus)
+            else if (roll > 55) return (scene, x, y, hpBonus) => new GunZombie(scene, x, y, hpBonus)
+            else                return (scene, x, y, hpBonus) => new NormalZombie(scene, x, y, hpBonus)
 
         } else {
             // Late game, tanks and rifles more threatening
-            if (roll > 85)      return (scene, x, y) => new TankZombie(scene, x, y)
-            else if (roll > 70) return (scene, x, y) => new RifleZombie(scene, x, y)
-            else if (roll > 50) return (scene, x, y) => new GunZombie(scene, x, y)
-            else                return (scene, x, y) => new NormalZombie(scene, x, y)
+            if (roll > 85)      return (scene, x, y, hpBonus) => new TankZombie(scene, x, y, hpBonus)
+            else if (roll > 70) return (scene, x, y, hpBonus) => new RifleZombie(scene, x, y, hpBonus)
+            else if (roll > 50) return (scene, x, y, hpBonus) => new GunZombie(scene, x, y, hpBonus)
+            else                return (scene, x, y, hpBonus) => new NormalZombie(scene, x, y, hpBonus)
         }
     }
 
@@ -326,6 +335,7 @@ class Main extends Phaser.Scene {
             fontFamily: 'Creepster', fontSize: "42px", fill: "#ffff00"
         }).setOrigin(0.5).setAlpha(0)
 
+        this.sfxUpgrade.play()
         this.fadeIn(text, 0)
     
         // Wait 2 seconds before the text disappears

@@ -89,7 +89,7 @@ class Enemy extends Entity {
 // Different zombie classes
 class NormalZombie extends Enemy {
     constructor(scene, x, y) {
-        super(scene, x, y, "normalZombie", 1, 100)
+        super(scene, x, y, "normalZombie", 1 + hpBonus, 100)
         this.speed = 80
     }
  
@@ -105,7 +105,7 @@ class NormalZombie extends Enemy {
 
 class GunZombie extends Enemy {
     constructor(scene, x, y) {
-        super(scene, x, y, "gunZombie", 2, 200)  // swap texture later
+        super(scene, x, y, "gunZombie", 2 + hpBonus, 200)  // swap texture later
         this.speed = 40
         this.driftSpeed = 90
         this.driftRange = 60     // px each direction from spawn x
@@ -134,7 +134,7 @@ class GunZombie extends Enemy {
 
 class TankZombie extends Enemy {
     constructor(scene, x, y) {
-        super(scene, x, y, "normalZombie", 5, 500)
+        super(scene, x, y, "normalZombie", 5 + hpBonus * 2, 500)
         this.speed = 30
         this.steerSpeed = 80
         this.sprite.setScale(2.5)
@@ -170,7 +170,7 @@ class TankZombie extends Enemy {
 
 class RifleZombie extends Enemy {
     constructor(scene, x, y) {
-        super(scene, x, y, "gunZombie", 3, 300)
+        super(scene, x, y, "gunZombie", 3 + hpBonus, 300)
         this.speed = 60
         this.stopY = Phaser.Math.Between(150, 250)  // where it stops
         this.settled = false
