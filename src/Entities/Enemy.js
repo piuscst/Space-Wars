@@ -1,6 +1,6 @@
 class Enemy extends Entity {
     constructor (scene, x, y, textureKey, hp = 1, points = 100, timeAlive = 0) {
-        super(scene, x, y, textureKey, 1.5)
+        super(scene, x, y, textureKey, 0.5)
         this.hp = hp
         this.maxHp = hp
         this.points = points
@@ -8,34 +8,30 @@ class Enemy extends Entity {
         this.bullets = []
         this.reachedBottom = false
 
-
-        this.sprite.angle = 90
+        this.sprite.body.setCollideWorldBounds(false)
     }
 
     update(time, delta) {
-        this.sprite.setTintFill(0xff0000)   
         if (!this.alive) {
             this.updateBullets(delta)
             return
         }
+
         this.timeAlive += delta
 
-        if (Math.floor(this.timeAlive / 1000) > Math.floor((this.timeAlive - delta) / 1000)) {
-            console.log("Zombie alive for: " + Math.floor(this.timeAlive / 1000) + "s")
-        }
         this.updateMovement(time, delta)
-        this.x = Phaser.Math.Clamp(this.x, 20, this.scene.scale.width - 20)
         this.updateBullets(delta)
     }
 
-    // Die when reaching the bottom of the canvas
+    // Exiting screen
     exitBottom() {
         this.reachedBottom = true
         this.die()
     }
 
+    // Updating Movement
     updateMovement(time, delta) {
-        // Will be implemented in sub class
+        // Sub class, depends on enemy type
     }
 
     // Spawning bullets
@@ -45,13 +41,12 @@ class Enemy extends Entity {
         return bullet
     }
 
-    // Updating these bullets
+    // Updating bullets on the scene
     updateBullets(delta) {
-        for (const b of this.bullets) {
+        for (const b of this.bullets) {   // was: bullets
             b.update(delta)
         }
 
-        // Destroying bullets
         this.bullets = this.bullets.filter(b => {
             if (!b.alive) {
                 b.destroy()
@@ -61,13 +56,16 @@ class Enemy extends Entity {
         })
     }
 
-    // Bullets dying
+    // Enemy and bullets dying
     die() {
         if (!this.alive) return
         this.alive = false
 
-        // Stop bullets
-        for (const bullet of this.bullets) bullet.destroy()
+        // Visually kill bullets
+        for (const bullet of this.bullets) {
+            bullet.destroy()
+        }
+        // Empty bullets array
         this.bullets = []
 
         // Death tween
@@ -83,130 +81,258 @@ class Enemy extends Entity {
             }
         })
     }
-}
 
-
-// Different zombie classes
-class NormalZombie extends Enemy {
-    constructor(scene, x, y) {
-        super(scene, x, y, "normalZombie", 1 + hpBonus, 100)
-        this.speed = 80
-    }
- 
-    updateMovement(time, delta) {
-        this.y += this.speed * (delta / 1000)
- 
-        // Die if it reaches the bottom
-        if (this.y > this.scene.scale.height + 40) {
-            this.exitBottom()
+    destroy() {
+        for (const b of this.bullets) {
+            b.destroy()
+        }
+        this.bullets = []
+        if (this.sprite && this.sprite.active) {
+            this.sprite.destroy()
         }
     }
 }
 
-class GunZombie extends Enemy {
-    constructor(scene, x, y) {
-        super(scene, x, y, "gunZombie", 2 + hpBonus, 200)  // swap texture later
-        this.speed = 40
-        this.driftSpeed = 90
-        this.driftRange = 60     // px each direction from spawn x
-        this.originX = x
-        this.shootTimer = Phaser.Math.Between(1000, 2500)
-        this.shootCooldown = this.shootTimer
+// Subclasses for enemies 
+
+class DriftEnemy extends Enemy {
+    constructor(scene, x, y, speed, shootRate, hp, points, index = 0, homeY = 80) {
+        super(scene, x, y, "EnemyShip1", hp, points)
+        this.speed = speed
+        this.shootRate = shootRate
+        this.shootTimer = shootRate * Math.random()
+        this.sprite.angle = 0
+
+        this.state = "entering"
+        this.homeX = x
+        this.homeY = homeY  // use exactly what's passed in
+        this.diveTimer = 1000 + index * 400 + Math.random() * 1000
     }
- 
+
     updateMovement(time, delta) {
-        // Drift horizontally using a sine wave
-        this.y += this.speed * (delta / 1000)
-        this.x = this.originX + Math.sin(time * 0.002) * this.driftRange
- 
-        // Shooting
-        this.shootCooldown -= delta
-        if (this.shootCooldown <= 0) {
-            this.spawnBullet(this.x - 16, this.y + 50, 0, 300)
-            this.shootCooldown = this.shootTimer
-        }
- 
-        if (this.y > this.scene.scale.height + 40) {
-            this.exitBottom()
-        }
-    }
-}
-
-class TankZombie extends Enemy {
-    constructor(scene, x, y) {
-        super(scene, x, y, "normalZombie", 5 + hpBonus * 2, 500)
-        this.speed = 30
-        this.steerSpeed = 80
-        this.sprite.setScale(2.5)
-    }
- 
-    updateMovement(time, delta) {
-        const player = this.scene.player
-
-        if (player && player.alive) {
-            // Get direction vector toward player
-            const dx = player.x - this.x
-            const dy = player.y - this.y
-            const dist = Math.sqrt(dx * dx + dy * dy)
-
-            if (dist > 0) {
-                // Normalize and move
-                const nx = dx / dist
-                const ny = dy / dist
-
-                this.x += nx * this.speed * (delta / 1000)
-                this.y += ny * this.speed * (delta / 1000)
-
-                // Face the player
-                this.sprite.angle = Math.atan2(dy, dx) * Phaser.Math.RAD_TO_DEG + 360
+        if (this.state === "entering") {
+            const dist = Phaser.Math.Distance.Between(this.x, this.y, this.homeX, this.homeY)
+            if (dist < 4) {
+                this.setVelocity(0, 0)
+                this.state = "holding"
+            } else {
+                // Slow down as it approaches home
+                const speed = Math.min(this.speed, dist * 3)
+                const angle = Phaser.Math.Angle.Between(this.x, this.y, this.homeX, this.homeY)
+                this.setVelocity(
+                    Math.cos(angle) * speed,
+                    Math.sin(angle) * speed
+                )
             }
-        }
 
-        if (this.y > this.scene.scale.height + 40) {
-            this.exitBottom()
-        }
-    }
-}
+        } else if (this.state === "holding") {
+            const bob = Math.sin(this.timeAlive / 400) * 15
+            this.sprite.y = this.homeY + bob
+            this.setVelocity(0, 0)
 
-class RifleZombie extends Enemy {
-    constructor(scene, x, y) {
-        super(scene, x, y, "gunZombie", 3 + hpBonus, 300)
-        this.speed = 60
-        this.stopY = Phaser.Math.Between(150, 250)  // where it stops
-        this.settled = false
-        this.shootTimer = 1500
-        this.shootCooldown = this.shootTimer
-    }
-
-    updateMovement(time, delta) {
-        if (!this.settled) {
-            // Advance until reaching stop position
-            this.y += this.speed * (delta / 1000)
-            if (this.y >= this.stopY) {
-                this.y = this.stopY
-                this.settled = true
+            this.diveTimer -= delta
+            if (this.diveTimer <= 0) {
+                this.state = "looping"
+                this.loopTimer = 0
+                this.diveElapsed = 0
             }
-        } else {
-            // Campp, aim and shoot at player
-            const player = this.scene.player
-            if (player && player.alive) {
-                const dx = player.x - this.x
-                const dy = player.y - this.y
-                this.sprite.angle = Math.atan2(dy, dx) * Phaser.Math.RAD_TO_DEG + 360
 
-                this.shootCooldown -= delta
-                if (this.shootCooldown <= 0) {
-                    const dist = Math.sqrt(dx * dx + dy * dy)
-                    const nx = dx / dist
-                    const ny = dy / dist
-                    this.spawnBullet(this.x, this.y, nx * 350, ny * 350)
-                    this.shootCooldown = this.shootTimer
+        } else if (this.state === "looping") {
+            this.loopTimer += delta
+            const t = this.loopTimer / 1000
+
+            const speed = 4
+            const radius = t * 40  // grows over time
+
+            this.sprite.x = this.homeX + Math.cos(t * speed) * radius
+            this.sprite.y = this.homeY + Math.sin(t * speed) * radius
+            this.setVelocity(0, 0)
+
+            const tangentAngle = t * speed + Math.PI / 2
+            this.sprite.rotation = tangentAngle + Math.PI / 2
+
+            if (this.loopTimer > 1500) {
+                this.state = "diving"
+                const player = this.scene.player
+                if (player && player.alive) {
+                    this.diveAngle = Phaser.Math.Angle.Between(this.x, this.y, player.x, player.y)
+                    console.log("diveAngle:", this.diveAngle, "player:", player.x, player.y, "enemy:", this.x, this.y)
+                } else {
+                    this.diveAngle = Math.PI / 2
                 }
             }
+
+        } else if (this.state === "diving") {
+            this.diveElapsed = (this.diveElapsed || 0) + delta
+
+            const vx = Math.cos(this.diveAngle) * this.speed
+            const vy = Math.sin(this.diveAngle) * this.speed
+            this.setVelocity(vx, vy)
+
+            if (this.y > this.scene.scale.height + 40 || 
+                this.x < -40 || this.x > this.scene.scale.width + 40) {
+                this.sprite.y = -40
+                this.sprite.x = this.homeX
+                this.diveElapsed = 0
+                this.state = "returning"
+                this.diveTimer = 3000 + Math.random() * 3000
+            }
+
+        } else if (this.state === "returning") {
+            const dist = Phaser.Math.Distance.Between(this.x, this.y, this.homeX, this.homeY)
+            if (dist < 8) {
+                this.setVelocity(0, 0)
+                this.sprite.x = this.homeX
+                this.sprite.y = this.homeY
+                this.state = "holding"
+            } else {
+                const angle = Phaser.Math.Angle.Between(this.x, this.y, this.homeX, this.homeY)
+                this.setVelocity(
+                    Math.cos(angle) * this.speed * 1.5,
+                    Math.sin(angle) * this.speed * 1.5
+                )
+            }
         }
 
-        if (this.y > this.scene.scale.height + 40) {
-            this.exitBottom()
+        const vel = this.sprite.body.velocity
+        if (vel.x !== 0 || vel.y !== 0) {
+            this.sprite.rotation = Math.atan2(vel.y, vel.x) + Math.PI / 2
+        }
+    }
+
+    update(time, delta) {
+        super.update(time, delta)
+        if (!this.alive) return
+
+        this.shootTimer -= delta
+        if (this.shootTimer <= 0) {
+            this.shootTimer = this.shootRate
+            // Only shoot while diving
+            if (this.state === "holding") {
+                this.spawnBullet(this.x, this.y, 0, 400)
+            }
+        }
+    }
+}
+
+class ShooterEnemy extends Enemy {
+    constructor(scene, x, y, speed, shootRate, hp, points, index = 0, homeY = 80) {
+        super(scene, x, y, "EnemyShip2", hp, points)
+        this.speed = speed
+        this.shootRate = shootRate
+        this.shootTimer = shootRate * Math.random()
+        this.homeX = x
+        this.homeY = homeY
+        this.state = "entering"
+    }
+
+    updateMovement(time, delta) {
+        if (this.state === "entering") {
+            const dist = Phaser.Math.Distance.Between(this.x, this.y, this.homeX, this.homeY)
+            if (dist < 8) {
+                this.setVelocity(0, 0)
+                this.sprite.x = this.homeX
+                this.sprite.y = this.homeY
+                this.state = "holding"
+            } else {
+                const angle = Phaser.Math.Angle.Between(this.x, this.y, this.homeX, this.homeY)
+                this.setVelocity(
+                    Math.cos(angle) * this.speed,
+                    Math.sin(angle) * this.speed
+                )
+            }
+        } else if (this.state === "holding") {
+            // Bob in place
+            const bob = Math.sin(this.timeAlive / 400) * 10
+            this.sprite.y = this.homeY + bob
+            this.setVelocity(0, 0)
+
+            const player = this.scene.player
+            if (player && player.alive) {
+                const angle = Phaser.Math.Angle.Between(this.x, this.y, player.x, player.y)
+                this.sprite.rotation = angle + (-Math.PI / 2)
+            }
+        }
+    }
+
+    update(time, delta) {
+        super.update(time, delta)
+        if (!this.alive) return
+
+        this.shootTimer -= delta
+        if (this.shootTimer <= 0) {
+            this.shootTimer = this.shootRate
+
+            const player = this.scene.player
+            if (player && player.alive) {
+                const angle = Phaser.Math.Angle.Between(this.x, this.y, player.x, player.y)
+                const speed = 500
+                this.spawnBullet(this.x, this.y, Math.cos(angle) * speed, Math.sin(angle) * speed)
+            }
+        }
+    }
+}
+
+class ChargerEnemy extends Enemy {
+    constructor(scene, x, y, speed, hp, points, index = 0, homeY = 80) {
+        super(scene, x, y, "EnemyShip3", hp, points)
+        this.speed = speed
+        this.homeX = x
+        this.homeY = homeY
+        this.state = "entering"
+        this.chargeDelay = 1000 + Math.random() * 1000
+        this.chargeAngle = 0
+    }
+
+    updateMovement(time, delta) {
+        if (this.state === "entering") {
+            const dist = Phaser.Math.Distance.Between(this.x, this.y, this.homeX, this.homeY)
+            if (dist < 8) {
+                this.setVelocity(0, 0)
+                this.state = "holding"
+            } else {
+                const angle = Phaser.Math.Angle.Between(this.x, this.y, this.homeX, this.homeY)
+                this.setVelocity(
+                    Math.cos(angle) * this.speed,
+                    Math.sin(angle) * this.speed
+                )
+            }
+
+        } else if (this.state === "holding") {
+            this.setVelocity(0, 0)
+            this.chargeDelay -= delta
+
+            // Face player while waiting
+            const player = this.scene.player
+            if (player && player.alive) {
+                const angle = Phaser.Math.Angle.Between(this.x, this.y, player.x, player.y)
+                this.sprite.rotation = angle + Math.PI / 2
+
+                if (this.chargeDelay <= 0) {
+                    // Lock angle toward player and charge
+                    this.chargeAngle = angle
+                    this.state = "charging"
+                }
+            }
+
+        } else if (this.state === "charging") {
+            const vx = Math.cos(this.chargeAngle) * this.speed * 2.5
+            const vy = Math.sin(this.chargeAngle) * this.speed * 2.5
+            this.setVelocity(vx, vy)
+
+            // Die if off screen
+            if (this.y > this.scene.scale.height + 40 ||
+                this.y < -40 ||
+                this.x < -40 || 
+                this.x > this.scene.scale.width + 40) {
+                this.die()
+            }
+        }
+
+        // Rotate to face movement direction
+        const vel = this.sprite.body.velocity
+        if (this.state === "charging" && (vel.x !== 0 || vel.y !== 0)) {
+            this.sprite.rotation = Math.atan2(vel.y, vel.x) + Math.PI / 2
         }
     }
 }

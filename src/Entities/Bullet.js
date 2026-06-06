@@ -1,24 +1,20 @@
-// Bullet is NOT an Entity — bullets don't have health, just position and velocity.
-// They're lightweight: a sprite, a direction, damage value, and an alive flag.
-
-class Bullet {
+class Bullet extends Entity {
     constructor(scene, x, y, dx, dy, damage, textureKey, scale) {
-        this.scene = scene
-        this.sprite = scene.add.sprite(x, y, textureKey)
-        this.sprite.setScale(scale)
-        this.dx = dx    // pixels per second
-        this.dy = dy
+        super(scene, x, y, textureKey, scale)  // scale was missing before too
         this.damage = damage
         this.alive = true
+        this.sprite.setScale(scale)
+        this.sprite.body.setVelocity(dx, dy)   // set once, physics handles the rest
+        this.sprite.body.setCollideWorldBounds(false)
     }
 
     update(delta) {
         if (!this.alive) return
-        this.sprite.x += this.dx * (delta / 1000)
-        this.sprite.y += this.dy * (delta / 1000)
         this.cullIfOffScreen()
+        // no manual position math needed anymore
     }
 
+    // Destroying off screen (for performance I guess)
     cullIfOffScreen() {
         const { width, height } = this.scene.scale
         const x = this.sprite.x
@@ -28,25 +24,29 @@ class Bullet {
         }
     }
 
+    // Bounds for bullets
     getBounds() {
         return this.sprite.getBounds()
     }
 
+    //Destroying bullets
     destroy() {
         this.sprite.destroy()
     }
 }
 
+// Subclasses for player and enemy bullets
+
 class PlayerBullet extends Bullet {
     constructor(scene, x, y, dx, dy, damage = 2) {
-        super(scene, x, y, dx, dy, damage, "playerBullet", 0.12) // was 0.2
+        super(scene, x, y, dx, dy, damage, "PlayerBullet", 0.7)
         this.sprite.angle = Phaser.Math.RadToDeg(Math.atan2(dy, dx)) + 90
     }
 }
 
 class EnemyBullet extends Bullet {
     constructor(scene, x, y, dx, dy, damage = 1) {
-        super(scene, x, y, dx, dy, damage, "enemyBullet", 0.12)
+        super(scene, x, y, dx, dy, damage, "EnemyBullet", 0.7)
         this.sprite.angle = Phaser.Math.RadToDeg(Math.atan2(dy, dx)) + 90
         this.sprite.setTint(0xff4444)
     }

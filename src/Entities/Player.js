@@ -1,18 +1,21 @@
 class Player extends Entity {
-    constructor (scene, x, y, textureKey) {
-        super(scene, x, y, textureKey, 1.5)
+    constructor(scene, x, y, textureKey) {
+        super(scene, x, y, textureKey, 0.8)
         this.hp = 5
         this.maxHp = 5
-        this.speed = 450
+        this.speed = 600
         this.shootCooldown = 0
-        this.fireRate = 600
+        this.fireRate = 400
         this.bulletDamage = 1
         this.bullets = []
         this.targetAngle = 0
         this.textureKey = textureKey
 
+        this.wKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W)
         this.aKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A)
+        this.sKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S)
         this.dKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D)
+        this.shiftKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT)
         this.spaceKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE)
     }
 
@@ -21,25 +24,27 @@ class Player extends Entity {
 
         this.shootCooldown -= delta
 
-        let moving = false
+        const left  = this.aKey.isDown
+        const right = this.dKey.isDown
+        const up    = this.wKey.isDown
+        const down  = this.sKey.isDown
 
-        let direction = 0
+        let vx = 0
+        let vy = 0
 
-        if (!this.spaceKey.isDown) {
-            if (this.aKey.isDown) {
-                this.x -= this.speed * (delta / 1000)
-                this.sprite.setTexture("playerReloading")
+        if (left)  vx -= 1
+        if (right) vx += 1
+        if (up)    vy -= 1
+        if (down)  vy += 1
 
-                direction = -1
-            }
-            if (this.dKey.isDown) {
-                this.x += this.speed * (delta / 1000)
-                this.sprite.setTexture("playerReloading")
-                direction = 1
-            }
+        if (vx !== 0 && vy !== 0) {
+            vx *= Math.SQRT1_2
+            vy *= Math.SQRT1_2
         }
 
-        this.x = Phaser.Math.Clamp(this.x, 20, this.scene.scale.width - 20)
+        const currentSpeed = this.shiftKey.isDown ? this.speed * 0.5 : this.speed
+        
+        this.setVelocity(vx * currentSpeed, vy * currentSpeed)
 
         // Shooting
         if (this.spaceKey.isDown && this.shootCooldown <= 0) {
@@ -47,52 +52,7 @@ class Player extends Entity {
             this.shootCooldown = this.fireRate
         }
 
-        if (this.spaceKey.isDown) {
-            // Shooting has priority
-            this.targetAngle = -90
-            this.sprite.setTexture(this.textureKey)
-        } else {
-            // Movement controls facing
-            if (this.aKey.isDown) {
-                this.targetAngle = 180
-                this.sprite.setTexture("playerReloading")
-            } else if (this.dKey.isDown) {
-                this.targetAngle = 0
-                this.sprite.setTexture("playerReloading")
-            }
-        }
-
-        this.targetScaleX = this.facing
-
-        this.updateBullets(delta)
-
-        // this.sprite.angle = -90
-        // this.sprite.flipX = this.aKey.isDown ? true : false 
-
-        const turnSpeed = 0.2
-
-        this.sprite.angle = Phaser.Math.Angle.RotateTo(
-            Phaser.Math.DegToRad(this.sprite.angle),
-            Phaser.Math.DegToRad(this.targetAngle),
-            turnSpeed
-        ) * Phaser.Math.RAD_TO_DEG
-    }
-
-    shoot() {
-        // Override in subclasses to define bullet pattern
-    }
- 
-    spawnBullet(x, y, dx, dy) {
-        const bullet = new PlayerBullet(this.scene, x, y, dx, dy, this.bulletDamage)
-        this.bullets.push(bullet)
-        return bullet
-    }
- 
-    updateBullets(delta) {
-        for (const b of this.bullets) {
-            b.update(delta)
-        }
-        // Remove bullets that have gone off screen or hit something
+        // Clean up dead bullets
         this.bullets = this.bullets.filter(b => {
             if (!b.alive) {
                 b.destroy()
@@ -100,56 +60,21 @@ class Player extends Entity {
             }
             return true
         })
-    }
 
-    die() {
-        for (const bullet of this.bullets) {
-            bullet.destroy()
+        // Update live bullets
+        for (const b of this.bullets) {
+            b.update(delta)
         }
-        this.bullets = []
-        super.die()
+}
+
+    shoot() {
+        const bullet = new PlayerBullet(this.scene, this.x, this.y, 0, -1200)
+        this.bullets.push(bullet)
     }
 }
 
-class PistolPlayer extends Player {
+class StarterShip extends Player {
     constructor(scene, x, y) {
-        super(scene, x, y, "player")
-        this.fireRate = 600
-        this.bulletDamage = 1
-    }
- 
-    shoot() {
-        this.scene.sfxShoot.stop()
-        this.scene.sfxShoot.play()
-        this.spawnBullet(this.x + 16, this.y - 50, 0, -700)
-    }
-}
-
-class ShotgunPlayer extends Player {
-    constructor(scene, x, y) {
-        super(scene, x, y, "playerShotgun")
-        this.fireRate = 1000
-        this.bulletDamage = 1
-    }
- 
-    shoot() {
-        this.scene.sfxShoot.stop()
-        this.scene.sfxShoot.play()
-        this.spawnBullet(this.x,       this.y - 20,   0,   -700)  // center
-        this.spawnBullet(this.x,       this.y - 20,  -180, -680)  // left
-        this.spawnBullet(this.x,       this.y - 20,   180, -680)  // right
-    }
-}
-
-class RiflePlayer extends Player {
-    constructor(scene, x, y) {
-        super(scene, x, y, "playerRifle")
-        this.fireRate = 200
-        this.bulletDamage = 2
-    }
- 
-    shoot() {
-        this.scene.sfxShoot.play()
-        this.spawnBullet(this.x + 16, this.y - 50, 0, -700)
+        super(scene, x, y, "PlayerShip1")
     }
 }
