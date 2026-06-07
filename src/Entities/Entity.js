@@ -23,7 +23,6 @@ class Entity {
     }
 
     // Dying
-
     die() {
         this.alive = false
         this.sprite.destroy()
@@ -35,7 +34,7 @@ class Entity {
     set x(val) {this.sprite.x = val}
     set y(val) {this.sprite.y = val}
 
-    setVelocity(vx, vy) { this.sprite.body.setVelocity(vx, vy) }
+    setVelocity(vx, vy) { this.sprite.body.setVelocity(vx, vy) }    
     setVelocityX(vx)    { this.sprite.body.setVelocityX(vx) }
     setVelocityY(vy)    { this.sprite.body.setVelocityY(vy) }
 
@@ -47,3 +46,4 @@ class Entity {
     update(time, delta) {
     }
 }
+

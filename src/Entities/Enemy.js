@@ -61,10 +61,6 @@ class Enemy extends Entity {
         if (!this.alive) return
         this.alive = false
 
-        // Visually kill bullets
-        for (const bullet of this.bullets) {
-            bullet.destroy()
-        }
         // Empty bullets array
         this.bullets = []
 
@@ -325,7 +321,7 @@ class ChargerEnemy extends Enemy {
                 this.y < -40 ||
                 this.x < -40 || 
                 this.x > this.scene.scale.width + 40) {
-                this.die()
+                this.state = "entering"
             }
         }
 

@@ -6,9 +6,7 @@
 let config = {
     parent: 'phaser-game',
     type: Phaser.CANVAS,
-    render: {
-        pixelArt: true
-    },
+    render: { pixelArt: true, roundPixels: true },
     width: 832,
     height: 832,
     scene: [Main],

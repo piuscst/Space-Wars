@@ -1,7 +1,7 @@
 class WaveManager {
     constructor(scene) {
         this.scene = scene
-        this.currentWave = 0
+        this.currentWave = 5
         this.enemies = []
         this.waveInProgress = false
         this.waveComplete = false
@@ -80,7 +80,7 @@ class WaveManager {
                     } else if (group.type === "charger") {
                         enemy = new ChargerEnemy(
                             this.scene, pos.x, -40,
-                            config.speed,           // no shootRate
+                            config.speed,           // no shootRate as its a Charger
                             config.hp, config.points,
                             globalIndex, homeY
                         )
@@ -163,8 +163,12 @@ class WaveManager {
     }
 
     spawnBoss(type) {
-        
-        console.log("Boss incoming:", type)
+        if (type === "Boss1") {
+            const boss = new Boss1(this.scene, this.scene.scale.width / 2, 120)
+            this.enemies.push(boss)
+            this.expectedEnemies = 1
+            this.spawnedEnemies = 1
+        }
     }
 
     update(time, delta) {
@@ -174,7 +178,7 @@ class WaveManager {
 
         this.enemies = this.enemies.filter(e => {
             if (!e.alive) {
-                e.destroy()
+                
                 return false
             }
             return true

@@ -38,7 +38,7 @@ class Bullet extends Entity {
 // Subclasses for player and enemy bullets
 
 class PlayerBullet extends Bullet {
-    constructor(scene, x, y, dx, dy, damage = 2) {
+    constructor(scene, x, y, dx, dy, damage = 1) {
         super(scene, x, y, dx, dy, damage, "PlayerBullet", 0.7)
         this.sprite.angle = Phaser.Math.RadToDeg(Math.atan2(dy, dx)) + 90
     }
