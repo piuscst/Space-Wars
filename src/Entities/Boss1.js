@@ -167,8 +167,8 @@ class Boss1 extends Entity {
 
             } else if (this.attackState === "diving") {
                 // Ballistic motion — continuous from wherever the loop ended.
-                const vx = Math.cos(this.diveAngle) * this.speed * 3
-                const vy = Math.sin(this.diveAngle) * this.speed * 3
+                const vx = Math.cos(this.diveAngle) * this.speed * 5
+                const vy = Math.sin(this.diveAngle) * this.speed * 5
                 this.sprite.x += vx * dt
                 this.sprite.y += vy * dt
 
@@ -259,7 +259,7 @@ class Boss1 extends Entity {
         if (!player || !player.alive) return
 
         this.shootTimer -= delta
-        const shootRate = phase === 3 ? 500 : phase === 2 ? 600 : 1000
+        const shootRate = phase === 3 ? 600 : phase === 2 ? 600 : 1000
 
         if (this.shootTimer <= 0) {
             this.shootTimer = shootRate

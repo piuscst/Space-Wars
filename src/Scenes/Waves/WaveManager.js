@@ -1,7 +1,7 @@
 class WaveManager {
     constructor(scene) {
         this.scene = scene
-        this.currentWave = 5
+        this.currentWave = 0
         this.enemies = []
         this.waveInProgress = false
         this.waveComplete = false
@@ -44,7 +44,8 @@ class WaveManager {
                     config.hp,
                     config.points,
                     i,
-                    homeY
+                    homeY,
+                    config.upgraded
                 )
                 this.enemies.push(enemy)
                 this.spawnedEnemies++  // increment as each one spawns
@@ -75,21 +76,21 @@ class WaveManager {
                             this.scene, pos.x, -40,
                             config.speed, config.shootRate,
                             config.hp, config.points,
-                            globalIndex, homeY
+                            globalIndex, homeY, config.upgraded
                         )
                     } else if (group.type === "charger") {
                         enemy = new ChargerEnemy(
                             this.scene, pos.x, -40,
                             config.speed,           // no shootRate as its a Charger
                             config.hp, config.points,
-                            globalIndex, homeY
+                            globalIndex, homeY, config.upgraded
                         )
                     } else {
                         enemy = new DriftEnemy(
                             this.scene, pos.x, -40,
                             config.speed, config.shootRate,
                             config.hp, config.points,
-                            globalIndex, homeY
+                            globalIndex, homeY, config.upgraded
                         )
                     }
                     this.enemies.push(enemy)

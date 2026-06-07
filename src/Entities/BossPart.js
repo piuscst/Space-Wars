@@ -41,6 +41,14 @@ class BossPart {
         })
     }
 
+    flash(duration = 80) {
+        if (!this.sprite || !this.sprite.active) return
+        this.sprite.setTintFill(0xffffff)
+        this.scene.time.delayedCall(duration, () => {
+            if (this.sprite && this.sprite.active) this.sprite.clearTint()
+        })
+    }
+
     destroy() {
         if (this.sprite && this.sprite.active) {
             this.sprite.destroy()

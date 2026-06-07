@@ -48,11 +48,9 @@ class EnemyBullet extends Bullet {
     constructor(scene, x, y, dx, dy, damage = 1) {
         super(scene, x, y, dx, dy, damage, "EnemyBullet", 0.7)
         this.sprite.angle = Phaser.Math.RadToDeg(Math.atan2(dy, dx)) + 90
-        this.sprite.setTint(0xff4444)
     }
 
     update(delta) {
         super.update(delta)
-        this.sprite.setTintFill(0xff4444)
     }
 }

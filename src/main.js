@@ -5,8 +5,8 @@
 // game config
 let config = {
     parent: 'phaser-game',
-    type: Phaser.CANVAS,
-    render: { pixelArt: true, roundPixels: true },
+    type: Phaser.AUTO,
+    render: { pixelArt: true},
     width: 832,
     height: 832,
     scene: [Main],

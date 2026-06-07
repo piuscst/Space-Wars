@@ -1,6 +1,7 @@
 class Enemy extends Entity {
-    constructor (scene, x, y, textureKey, hp = 1, points = 100, timeAlive = 0) {
-        super(scene, x, y, textureKey, 0.5)
+    constructor (scene, x, y, textureKey, hp = 1, points = 100, timeAlive = 0, upgraded = false) {
+        const key = upgraded ? textureKey + "_Upgraded" : textureKey
+        super(scene, x, y, key, 0.5)
         this.hp = hp
         this.maxHp = hp
         this.points = points
@@ -92,8 +93,8 @@ class Enemy extends Entity {
 // Subclasses for enemies 
 
 class DriftEnemy extends Enemy {
-    constructor(scene, x, y, speed, shootRate, hp, points, index = 0, homeY = 80) {
-        super(scene, x, y, "EnemyShip1", hp, points)
+    constructor(scene, x, y, speed, shootRate, hp, points, index = 0, homeY = 80, upgraded = false) {
+        super(scene, x, y, "EnemyShip1", hp, points, 0, upgraded)
         this.speed = speed
         this.shootRate = shootRate
         this.shootTimer = shootRate * Math.random()
@@ -212,8 +213,8 @@ class DriftEnemy extends Enemy {
 }
 
 class ShooterEnemy extends Enemy {
-    constructor(scene, x, y, speed, shootRate, hp, points, index = 0, homeY = 80) {
-        super(scene, x, y, "EnemyShip2", hp, points)
+    constructor(scene, x, y, speed, shootRate, hp, points, index = 0, homeY = 80, upgraded = false) {
+        super(scene, x, y, "EnemyShip2", hp, points, 0, upgraded)
         this.speed = speed
         this.shootRate = shootRate
         this.shootTimer = shootRate * Math.random()
@@ -270,8 +271,8 @@ class ShooterEnemy extends Enemy {
 }
 
 class ChargerEnemy extends Enemy {
-    constructor(scene, x, y, speed, hp, points, index = 0, homeY = 80) {
-        super(scene, x, y, "EnemyShip3", hp, points)
+    constructor(scene, x, y, speed, hp, points, index = 0, homeY = 80, upgraded = false) {
+        super(scene, x, y, "EnemyShip3", hp, points, 0, upgraded)
         this.speed = speed
         this.homeX = x
         this.homeY = homeY

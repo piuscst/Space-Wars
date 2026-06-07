@@ -15,15 +15,18 @@ class Main extends Phaser.Scene {
         this.load.image("PlayerShip3", "playerShip3_blue.png")
         this.load.image("PlayerBullet", "laserBlue16.png")
         this.load.image("PlayerBullet2", "laserBlue08.png")
-        this.load.image("PlayerShield", "powerupBlue_shield.png")
         this.load.image("PlayerLife", "playerLife1_blue.png")
+        // Power Ups and Shield
         this.load.image("PlayerShieldPowerUp", "powerupBlue_shield.png")
         this.load.image("PlayerShield", "shield3.png")
 
         // Enemy Sprites
         this.load.image("EnemyShip1", "enemyRed1.png")
+        this.load.image("EnemyShip1_Upgraded", "enemyRed3.png")
         this.load.image("EnemyShip2", "enemyBlue2.png")
+        this.load.image("EnemyShip2_Upgraded", "enemyBlue4.png")
         this.load.image("EnemyShip3", "enemyGreen3.png")
+        this.load.image("EnemyShip3_Upgraded", "enemyGreen5.png")
         this.load.image("EnemyBullet", "laserRed16.png")
 
         // Boss Sprites
@@ -41,6 +44,7 @@ class Main extends Phaser.Scene {
 
     create() {
         this.enemies = []
+        this.pickups = []
         this.wave = 0
         this.waveInProgress = false
         this.score = 0
@@ -58,6 +62,12 @@ class Main extends Phaser.Scene {
         this.player = new StarterShip(this, 400, 695)
         this.waveManager = new WaveManager(this)
         this.waveManager.startNextWave()
+
+        this.lifeIcons = []
+        this.renderLives()
+        this.lastHp = this.player.hp
+        this.shieldIcons = []
+        this.updateShieldHUD()
 
         // Score text
         this.scoreText = this.add.text(16, 16, 'SCORE: 0', {
@@ -80,6 +90,9 @@ class Main extends Phaser.Scene {
 
         this.checkCollisions()
 
+        for (const p of this.pickups) p.update(delta)
+        this.pickups = this.pickups.filter(p => p.alive)
+
         // Start next wave when current one clears
         if (this.waveManager.waveComplete) {
             this.waveManager.waveComplete = false
@@ -91,6 +104,11 @@ class Main extends Phaser.Scene {
         if (this.displayedScore < this.score) {
             this.displayedScore += Math.ceil((this.score - this.displayedScore) / 150)
             if (this.displayedScore > this.score) this.displayedScore = this.score
+        }
+
+        if (this.player.hp !== this.lastHp) {
+            this.lastHp = this.player.hp
+            this.renderLives()
         }
 
         this.scoreText.setText('SCORE: ' + this.displayedScore)
@@ -127,10 +145,14 @@ class Main extends Phaser.Scene {
                 if (this.overlaps(bullet, enemy)) {
                     bullet.alive = false
                     const died = enemy.takeDamage(bullet.damage)
+                    if (!died) enemy.flash()
                     if (died) {
                         let multiplier = 1
                         if (enemy.state === "diving" || enemy.state === "charging") multiplier = 2
                         if (enemy.state === "looping") multiplier = 3
+                        if (Math.random() < 0.12) {
+                            this.pickups.push(new ShieldPickup(this, enemy.x, enemy.y))
+                        }
                         const points = enemy.points * multiplier
                         this.score += points
                         this.showFloatingScore(enemy.x, enemy.y, points, multiplier)
@@ -165,18 +187,34 @@ class Main extends Phaser.Scene {
                     if (!gun.alive) continue
                     if (Phaser.Geom.Intersects.RectangleToRectangle(bullet.getBounds(), gun.getBounds())) {
                         bullet.alive = false
-                        gun.takeDamage(bullet.damage)
+                        const died = gun.takeDamage(bullet.damage)
+                        gun.flash()
                         hit = true
+
+                        // Award points when a gun is destroyed
+                        if (died || !gun.alive) {
+                            const gunPoints = Math.round(enemy.points * 0.05)
+                            this.score += gunPoints
+                            this.showFloatingScore(gun.sprite.x, gun.sprite.y, gunPoints, 1)
+                        }
                         break
                     }
                 }
 
                 // Check cockpit only if didn't hit a gun
                 if (!hit) {
-                    if (Phaser.Geom.Intersects.RectangleToRectangle(bullet.getBounds(), enemy.cockpit.getBounds())) {
-                        bullet.alive = false
-                        enemy.cockpit.takeDamage(bullet.damage)
-                        console.log(enemy.cockpit.hp)
+                    const overlap = Phaser.Geom.Intersects.RectangleToRectangle(bullet.getBounds(), enemy.cockpit.getBounds())
+                        if (overlap) {
+                            bullet.alive = false
+                            enemy.cockpit.takeDamage(bullet.damage)
+                            enemy.cockpit.flash()
+
+                        // Award score when this hit finishes the boss
+                        if (!enemy.cockpit.alive && !enemy.scored) {
+                            enemy.scored = true
+                            this.score += enemy.points
+                            this.showFloatingScore(enemy.x, enemy.y, enemy.points, 1)
+                        }
                     }
                 }
             }
@@ -189,6 +227,16 @@ class Main extends Phaser.Scene {
             if (enemy.alive && Phaser.Geom.Intersects.RectangleToRectangle(
                 enemy.cockpit.getBounds(), this.player.getBounds())) {
                 this.player.takeDamage(2)
+            }
+        }
+
+        for (const p of this.pickups) {
+            if (!p.alive) continue
+            if (!this.player.alive) continue
+            if (this.overlaps(p, this.player)) {
+                p.die()
+                this.player.addShield(1)
+                if (this.sound) this.sound.play("sfxUpgrade")  // you already load this
             }
         }
     }
@@ -221,6 +269,44 @@ class Main extends Phaser.Scene {
         return Phaser.Geom.Intersects.RectangleToRectangle(ba, bb)
     }
 
+    renderLives() {
+        // Clear any existing icons
+        for (const icon of this.lifeIcons) icon.destroy()
+        this.lifeIcons = []
+
+        const margin   = 16
+        const spacing  = 40   // gap between icons
+        const baseY    = this.scale.height - margin
+
+        for (let i = 0; i < this.player.hp; i++) {
+            const icon = this.add.image(
+                margin + i * spacing,
+                baseY,
+                "PlayerLife"
+            )
+            icon.setOrigin(0, 1)   // anchor bottom-left so it sits on the corner
+            this.lifeIcons.push(icon)
+        }
+    }
+
+    updateShieldHUD() {
+        for (const icon of this.shieldIcons) icon.destroy()
+        this.shieldIcons = []
+
+        const margin  = 16
+        const spacing = 40
+        const baseX   = this.scale.width - margin   // right edge
+        const baseY   = this.scale.height - margin  // bottom edge
+
+        for (let i = 0; i < this.player.shieldCount; i++) {
+            const icon = this.add.image(baseX - i * spacing, baseY, "PlayerShieldPowerUp")
+            icon.setOrigin(1, 1)        // anchor bottom-right
+            icon.setScale(1)
+            this.shieldIcons.push(icon)
+        }
+    }
+
+    // For testing
     skipWave() {
         // Kill all enemies
         for (const enemy of this.waveManager.enemies) {
