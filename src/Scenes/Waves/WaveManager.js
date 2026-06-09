@@ -4,7 +4,7 @@
 class WaveManager {
     constructor(scene) {
         this.scene = scene
-        this.currentWave = 17
+        this.currentWave = 0
         this.enemies = []
         this.waveInProgress = false
         this.waveComplete = false
