@@ -5,7 +5,7 @@ class Player extends Entity {
         this.maxHp = 5
         this.speed = 600
         this.shootCooldown = 0
-        this.fireRate = 400
+        this.fireRate = 200
         this.bulletDamage = 1
         this.bullets = []
         this.targetAngle = 0
@@ -94,12 +94,18 @@ class Player extends Entity {
     shoot() {
         const bullet = new PlayerBullet(this.scene, this.x, this.y, 0, -1200)
         this.bullets.push(bullet)
+        this.scene.sound.play("sfxLaser", { volume: 0.4 })
+    }
+
+    heal(n = 1) {
+        this.hp = Math.min(this.maxHp, this.hp + n)
     }
 
     activateShield() {
         if (this.shielded) return          // already up, don't waste a charge
         if (this.shieldCount <= 0) return  // none in stock
         this.shieldCount--
+        this.scene.sound.play("sfxShield", { volume: 0.6 })
 
         this.shielded = true
         this.shieldSprite.setVisible(true)
@@ -142,9 +148,10 @@ class Player extends Entity {
 
     takeDamage(amount) {
         if (this.shielded) {
-            this.deactivateShield()   // shield eats the hit, then pops
+            this.deactivateShield()
             return
         }
+        this.scene.sound.play("sfxHit", { volume: 0.5 })
         super.takeDamage(amount)
     }
 }

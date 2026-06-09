@@ -9,7 +9,7 @@ let config = {
     render: { pixelArt: true},
     width: 832,
     height: 832,
-    scene: [Main],
+    scene: [MenuScene, Main, GameOverScene, WinScene],
     backgroundColor: 0x030303,
     physics: {
         default: 'arcade',

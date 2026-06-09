@@ -13,13 +13,11 @@ class Enemy extends Entity {
     }
 
     update(time, delta) {
-        if (!this.alive) {
+        if (!this.alive || !this.sprite || !this.sprite.active) {
             this.updateBullets(delta)
             return
         }
-
         this.timeAlive += delta
-
         this.updateMovement(time, delta)
         this.updateBullets(delta)
     }
@@ -39,6 +37,7 @@ class Enemy extends Entity {
     spawnBullet(x, y, dx, dy) {
         const bullet = new EnemyBullet(this.scene, x, y, dx, dy, 1)
         this.bullets.push(bullet)
+        this.scene.sound.play("sfxLaser", { volume: 0.15, rate: 0.7 })  // lower/deeper than player
         return bullet
     }
 

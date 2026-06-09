@@ -7,8 +7,6 @@ class Main extends Phaser.Scene {
     preload() {
         this.load.setPath("./assets/")
 
-        // -- Sprites --
-
         // Player Sprites
         this.load.image("PlayerShip1", "playerShip1_blue.png")
         this.load.image("PlayerShip2", "playerShip2_blue.png")
@@ -16,9 +14,9 @@ class Main extends Phaser.Scene {
         this.load.image("PlayerBullet", "laserBlue16.png")
         this.load.image("PlayerBullet2", "laserBlue08.png")
         this.load.image("PlayerLife", "playerLife1_blue.png")
-        // Power Ups and Shield
         this.load.image("PlayerShieldPowerUp", "powerupBlue_shield.png")
         this.load.image("PlayerShield", "shield3.png")
+        this.load.image("PlayerHealthPowerUp", "pill_red.png")
 
         // Enemy Sprites
         this.load.image("EnemyShip1", "enemyRed1.png")
@@ -32,14 +30,24 @@ class Main extends Phaser.Scene {
         // Boss Sprites
         this.load.image("cockpitBlue", "cockpitBlue_0.png")
         this.load.image("wingBlue", "wingBlue_4.png")
+
+        this.load.image("cockpitYellow", "cockpitYellow_4.png")
+        this.load.image("wingYellow", "wingYellow_0.png")
+
+        this.load.image("cockpitRed", "cockpitRed_3.png")
+        this.load.image("wingRed", "wingRed_7.png")
+
         this.load.image("gun00", "gun00.png")
         this.load.image("gun05", "gun05.png")
         this.load.image("beam", "beam6.png")
 
-        // -- SFX --
-        this.load.audio("sfxHit", "hit_sfx.ogg")
+        // SFX
+        this.load.audio("sfxHit", "impactMetal_004.ogg")
+        this.load.audio("sfxLaser", "laserSmall_004.ogg")
+        this.load.audio("sfxShield", "forceField_003.ogg")
+        this.load.audio("sfxDeath", "explosionCrunch_000.ogg")
         this.load.audio("sfxUpgrade", "upgrade_sfx.mp3")
-
+        this.load.audio("bgm", "serhii_kliets-spaceship-arcade-shooter-game-background-soundtrack-318508.mp3")
     }
 
     create() {
@@ -50,14 +58,10 @@ class Main extends Phaser.Scene {
         this.score = 0
         this.displayedScore = 0
         this.debug = false
+        this.gameEnded = false   // prevent double-triggering game over / win
 
-        // Stars!
-        this.generateStarTexture("stars1", 3, 150)   // small, lots of stars
-        this.generateStarTexture("stars2", 5, 60)    // bigger, fewer stars
-        this.stars1 = this.add.tileSprite(0, 0, this.scale.width, this.scale.height, "stars1")
-        this.stars1.setOrigin(0, 0)
-        this.stars2 = this.add.tileSprite(0, 0, this.scale.width, this.scale.height, "stars2")
-        this.stars2.setOrigin(0, 0)
+        // Stars
+        this._makeStars(400)
 
         this.player = new StarterShip(this, 400, 695)
         this.waveManager = new WaveManager(this)
@@ -69,36 +73,49 @@ class Main extends Phaser.Scene {
         this.shieldIcons = []
         this.updateShieldHUD()
 
-        // Score text
         this.scoreText = this.add.text(16, 16, 'SCORE: 0', {
             fontSize: '32px',
             fill: '#ffffff',
             fontFamily: 'monospace'
         })
 
-        // Skip wave for debugging
+        this.music = this.sound.add("bgm", { loop: true, volume: 0.1 })
+        this.music.play()
+
         this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.K).on('down', () => this.skipWave())
     }
 
     update(time, delta) {
+        if (this.gameEnded) return
+
         this.player.update(time, delta)
         this.waveManager.update(time, delta)
 
-        // Parallax Effect
-        this.stars1.tilePositionY -= 0.5
-        this.stars2.tilePositionY -= 0.8
+        for (const s of this.stars) {
+            s.obj.y += s.speed
+            if (s.obj.y > this.scale.height + 4) s.obj.y = -4
+        }
 
         this.checkCollisions()
 
         for (const p of this.pickups) p.update(delta)
         this.pickups = this.pickups.filter(p => p.alive)
 
-        // Start next wave when current one clears
         if (this.waveManager.waveComplete) {
             this.waveManager.waveComplete = false
             this.time.delayedCall(1500, () => {
-                this.waveManager.startNextWave()
+                // All waves done = win
+                if (this.waveManager.currentWave >= WAVES.length && !this.gameEnded) {
+                    this.endGame("win")
+                } else {
+                    this.waveManager.startNextWave()
+                }
             })
+        }
+
+        // Player death = game over
+        if (!this.player.alive && !this.gameEnded) {
+            this.endGame("lose")
         }
 
         if (this.displayedScore < this.score) {
@@ -114,45 +131,65 @@ class Main extends Phaser.Scene {
         this.scoreText.setText('SCORE: ' + this.displayedScore)
     }
 
-    checkCollisions() {
-        // Enemy body vs player + enemy bullets vs player
-        for (const enemy of this.waveManager.enemies) {
-            if (enemy instanceof Boss1) continue
+    endGame(result) {
+        if (this.gameEnded) return
+        this.gameEnded = true
+        if (this.music) this.music.stop()
 
-            // Bullet vs player
+        this.cameras.main.fadeOut(600, 0, 0, 0)
+        this.cameras.main.once("camerafadeoutcomplete", () => {
+            if (result === "win") {
+                this.scene.start("WinScene", { score: this.score })
+            } else {
+                this.scene.start("GameOverScene", { score: this.score })
+            }
+        })
+    }
+
+    checkCollisions() {
+        const player = this.player
+
+        for (const enemy of this.waveManager.enemies) {
+            // Skip bosses in the generic enemy checks below — handled separately
+            if (enemy instanceof Boss1 || enemy instanceof Boss2 || enemy instanceof Boss3) continue
+            // Skip minions in generic body-vs-player (handled in Boss2 minion section)
+            if (enemy instanceof Boss2Minion) continue
+
+            // Enemy bullets vs player
             for (const bullet of enemy.bullets) {
-                if (!bullet.alive) continue
-                if (!this.player.alive) continue
-                if (this.overlaps(bullet, this.player)) {
+                if (!bullet.alive || !player.alive) continue
+                if (this.overlaps(bullet, player)) {
                     bullet.alive = false
-                    this.player.takeDamage(bullet.damage)
+                    player.takeDamage(bullet.damage)
                 }
             }
 
             // Enemy body vs player
-            if (!this.player.alive) continue
-            if (enemy.alive && this.overlaps(enemy, this.player)) {
+            if (!player.alive) continue
+            if (enemy.alive && this.overlaps(enemy, player)) {
                 enemy.die()
-                this.player.takeDamage(1)
+                player.takeDamage(1)
             }
         }
 
-        for (const bullet of this.player.bullets) {
+        // Player bullets vs regular enemies
+        for (const bullet of player.bullets) {
             if (!bullet.alive) continue
             for (const enemy of this.waveManager.enemies) {
                 if (!enemy.alive) continue
-                if (enemy instanceof Boss1) continue
+                if (enemy instanceof Boss1 || enemy instanceof Boss2 || enemy instanceof Boss3) continue
+                if (enemy instanceof Boss2Minion) continue
                 if (this.overlaps(bullet, enemy)) {
                     bullet.alive = false
                     const died = enemy.takeDamage(bullet.damage)
-                    if (!died) enemy.flash()
+                    if (!died) { enemy.flash(); this.sound.play("sfxHit", { volume: 0.25 }) }   
                     if (died) {
+                        this.sound.play("sfxDeath", { volume: 0.4 })
                         let multiplier = 1
                         if (enemy.state === "diving" || enemy.state === "charging") multiplier = 2
                         if (enemy.state === "looping") multiplier = 3
-                        if (Math.random() < 0.12) {
-                            this.pickups.push(new ShieldPickup(this, enemy.x, enemy.y))
-                        }
+                        if (Math.random() < 0.12) this.pickups.push(new ShieldPickup(this, enemy.x, enemy.y))
+                        if (Math.random() < 0.06) this.pickups.push(new HealthPickup(this, enemy.x, enemy.y))
                         const points = enemy.points * multiplier
                         this.score += points
                         this.showFloatingScore(enemy.x, enemy.y, points, multiplier)
@@ -161,22 +198,102 @@ class Main extends Phaser.Scene {
             }
         }
 
-        // Boss bullets vs player
+        // ---- Boss2Minion collisions ----
         for (const enemy of this.waveManager.enemies) {
-            if (!(enemy instanceof Boss1)) continue
+            if (!(enemy instanceof Boss2Minion)) continue
+
+            // Minion bullets vs player (pop-shot on death)
             for (const bullet of enemy.bullets) {
-                if (!bullet.alive) continue
-                if (!this.player.alive) continue
-                if (this.overlaps(bullet, this.player)) {
+                if (!bullet.alive || !player.alive) continue
+                if (this.overlaps(bullet, player)) {
                     bullet.alive = false
-                    this.player.takeDamage(bullet.damage)
+                    player.takeDamage(bullet.damage)
+                }
+            }
+
+            // Minion body vs player (ram damage)
+            if (player.alive && enemy.alive && this.overlaps(enemy, player)) {
+                enemy.die()
+                player.takeDamage(1)
+            }
+        }
+
+        // Player bullets vs minions
+        for (const bullet of player.bullets) {
+            if (!bullet.alive) continue
+            for (const enemy of this.waveManager.enemies) {
+                if (!(enemy instanceof Boss2Minion) || !enemy.alive) continue
+                if (this.overlaps(bullet, enemy)) {
+                    bullet.alive = false
+                    const died = enemy.takeDamage(bullet.damage)
+                    if (!died) { enemy.flash(); this.sound.play("sfxHit", { volume: 0.25 }) }  
+                    if (died) {
+                        this.score += enemy.points
+                        this.showFloatingScore(enemy.x, enemy.y, enemy.points, 1)
+                    }
                 }
             }
         }
 
-        // Player bullets vs boss parts
+        // ---- Boss1 collisions (unchanged from your original) ----
+        this._bossBulletVsPlayer(Boss1)
+        this._playerBulletsVsBossParts(Boss1)
+        this._bossBodyVsPlayer(Boss1)
+
+        // ---- Boss2 collisions ----
+        // Boss2 bullet pop-shots from minions come through boss.bullets already
+        this._bossBulletVsPlayer(Boss2)
+        this._playerBulletsVsBossParts(Boss2)
+        this._bossBodyVsPlayer(Boss2)
+
+        // ---- Boss3 collisions ----
+        this._bossBulletVsPlayer(Boss3)
+        this._playerBulletsVsBossParts(Boss3)
+        // Boss3 rams player — check body overlap and deal contact damage
         for (const enemy of this.waveManager.enemies) {
-            if (!(enemy instanceof Boss1)) continue
+            if (!(enemy instanceof Boss3) || !enemy.alive || !player.alive) continue
+            if (enemy.ramState === "ramming" && !enemy.ramHitPlayer &&
+                Phaser.Geom.Intersects.RectangleToRectangle(
+                    enemy.cockpit.getBounds(), player.getBounds())) {
+                enemy.ramHitPlayer = true        // <- only once per ram
+                player.takeDamage(2)
+            }
+        }
+
+        // Pickups vs player
+        for (const p of this.pickups) {
+            if (!p.alive || !player.alive) continue
+            if (this.overlaps(p, player)) {
+                p.die()
+                if (p instanceof HealthPickup) {
+                    player.heal(1)
+                } else {
+                    player.addShield(1)
+                }
+                if (this.sound) this.sound.play("sfxUpgrade")
+            }
+        }
+    }
+
+    // ---- Shared boss collision helpers ----
+
+    _bossBulletVsPlayer(BossClass) {
+        const player = this.player
+        for (const enemy of this.waveManager.enemies) {
+            if (!(enemy instanceof BossClass)) continue
+            for (const bullet of enemy.bullets) {
+                if (!bullet.alive || !player.alive) continue
+                if (this.overlaps(bullet, player)) {
+                    bullet.alive = false
+                    player.takeDamage(bullet.damage)
+                }
+            }
+        }
+    }
+
+    _playerBulletsVsBossParts(BossClass) {
+        for (const enemy of this.waveManager.enemies) {
+            if (!(enemy instanceof BossClass)) continue
 
             for (const bullet of this.player.bullets) {
                 if (!bullet.alive) continue
@@ -189,29 +306,28 @@ class Main extends Phaser.Scene {
                         bullet.alive = false
                         const died = gun.takeDamage(bullet.damage)
                         gun.flash()
+                        if (died) this.sound.play("sfxDeath", { volume: 0.35 })
+                        else      this.sound.play("sfxHit",   { volume: 0.2 })
                         hit = true
-
-                        // Award points when a gun is destroyed
                         if (died || !gun.alive) {
-                            const gunPoints = Math.round(enemy.points * 0.05)
-                            this.score += gunPoints
-                            this.showFloatingScore(gun.sprite.x, gun.sprite.y, gunPoints, 1)
+                            const pts = Math.round(enemy.points * 0.05)
+                            this.score += pts
+                            this.showFloatingScore(gun.sprite.x, gun.sprite.y, pts, 1)
                         }
                         break
                     }
                 }
 
-                // Check cockpit only if didn't hit a gun
                 if (!hit) {
-                    const overlap = Phaser.Geom.Intersects.RectangleToRectangle(bullet.getBounds(), enemy.cockpit.getBounds())
-                        if (overlap) {
-                            bullet.alive = false
-                            enemy.cockpit.takeDamage(bullet.damage)
-                            enemy.cockpit.flash()
+                    if (Phaser.Geom.Intersects.RectangleToRectangle(bullet.getBounds(), enemy.cockpit.getBounds())) {
+                        bullet.alive = false
+                        enemy.cockpit.takeDamage(bullet.damage)
+                        enemy.cockpit.flash()
+                        this.sound.play("sfxHit", { volume: 0.2 })
 
-                        // Award score when this hit finishes the boss
                         if (!enemy.cockpit.alive && !enemy.scored) {
                             enemy.scored = true
+                            this.sound.play("sfxDeath", { volume: 0.5 })   // boss death — louder
                             this.score += enemy.points
                             this.showFloatingScore(enemy.x, enemy.y, enemy.points, 1)
                         }
@@ -219,72 +335,42 @@ class Main extends Phaser.Scene {
                 }
             }
         }
+    }
 
-        // Boss body vs player
+    _bossBodyVsPlayer(BossClass) {
+        const player = this.player
         for (const enemy of this.waveManager.enemies) {
-            if (!(enemy instanceof Boss1)) continue
-            if (!this.player.alive) continue
-            if (enemy.alive && Phaser.Geom.Intersects.RectangleToRectangle(
-                enemy.cockpit.getBounds(), this.player.getBounds())) {
-                this.player.takeDamage(2)
-            }
-        }
-
-        for (const p of this.pickups) {
-            if (!p.alive) continue
-            if (!this.player.alive) continue
-            if (this.overlaps(p, this.player)) {
-                p.die()
-                this.player.addShield(1)
-                if (this.sound) this.sound.play("sfxUpgrade")  // you already load this
+            if (!(enemy instanceof BossClass) || !enemy.alive || !player.alive) continue
+            if (Phaser.Geom.Intersects.RectangleToRectangle(
+                enemy.cockpit.getBounds(), player.getBounds())) {
+                player.takeDamage(2)
             }
         }
     }
 
     showFloatingScore(x, y, points, multiplier) {
         const color = multiplier >= 3 ? '#ffff00' : multiplier === 2 ? '#ff9900' : '#ffffff'
-        const text = multiplier > 1 ? `+${points} x${multiplier}!` : `+${points}`
-        
-        const floatingText = this.add.text(x, y, text, {
-            fontSize: '20px',
-            fill: color,
-            fontFamily: 'monospace',
-            stroke: '#000000',
-            strokeThickness: 3
+        const text  = multiplier > 1 ? `+${points} x${multiplier}!` : `+${points}`
+        const ft = this.add.text(x, y, text, {
+            fontSize: '20px', fill: color, fontFamily: 'monospace',
+            stroke: '#000000', strokeThickness: 3
         })
-
         this.tweens.add({
-            targets: floatingText,
-            y: y - 60,
-            alpha: 0,
-            duration: 800,
-            ease: 'Power2',
-            onComplete: () => floatingText.destroy()
+            targets: ft, y: y - 60, alpha: 0, duration: 800, ease: 'Power2',
+            onComplete: () => ft.destroy()
         })
     }
 
     overlaps(a, b) {
-        const ba = a.getBounds()
-        const bb = b.getBounds()
-        return Phaser.Geom.Intersects.RectangleToRectangle(ba, bb)
+        return Phaser.Geom.Intersects.RectangleToRectangle(a.getBounds(), b.getBounds())
     }
 
     renderLives() {
-        // Clear any existing icons
         for (const icon of this.lifeIcons) icon.destroy()
         this.lifeIcons = []
-
-        const margin   = 16
-        const spacing  = 40   // gap between icons
-        const baseY    = this.scale.height - margin
-
+        const margin = 16, spacing = 40, baseY = this.scale.height - margin
         for (let i = 0; i < this.player.hp; i++) {
-            const icon = this.add.image(
-                margin + i * spacing,
-                baseY,
-                "PlayerLife"
-            )
-            icon.setOrigin(0, 1)   // anchor bottom-left so it sits on the corner
+            const icon = this.add.image(margin + i * spacing, baseY, "PlayerLife").setOrigin(0, 1)
             this.lifeIcons.push(icon)
         }
     }
@@ -292,53 +378,32 @@ class Main extends Phaser.Scene {
     updateShieldHUD() {
         for (const icon of this.shieldIcons) icon.destroy()
         this.shieldIcons = []
-
-        const margin  = 16
-        const spacing = 40
-        const baseX   = this.scale.width - margin   // right edge
-        const baseY   = this.scale.height - margin  // bottom edge
-
+        const margin = 16, spacing = 40
+        const baseX = this.scale.width - margin, baseY = this.scale.height - margin
         for (let i = 0; i < this.player.shieldCount; i++) {
-            const icon = this.add.image(baseX - i * spacing, baseY, "PlayerShieldPowerUp")
-            icon.setOrigin(1, 1)        // anchor bottom-right
-            icon.setScale(1)
+            const icon = this.add.image(baseX - i * spacing, baseY, "PlayerShieldPowerUp").setOrigin(1, 1).setScale(1)
             this.shieldIcons.push(icon)
         }
     }
 
-    // For testing
     skipWave() {
-        // Kill all enemies
-        for (const enemy of this.waveManager.enemies) {
-            enemy.die()
-        }
+        for (const enemy of this.waveManager.enemies) enemy.die()
         this.waveManager.enemies = []
         this.waveManager.spawnedEnemies = this.waveManager.expectedEnemies
         this.waveManager.waveInProgress = false
         this.waveManager.waveComplete = true
     }
 
-    generateStarTexture(key, starSize, starCount) {
-        const w = this.scale.width
-        const h = this.scale.height
-
-        const graphics = this.make.graphics({ x: 0, y: 0, add: false })
-
-        for (let i = 0; i < starCount; i++) {
-            const x = Phaser.Math.Between(0, w)
-            const y = Phaser.Math.Between(0, h)
-            const shapeRoll = Phaser.Math.Between(1, 2)
-            const alpha = Phaser.Math.FloatBetween(0.3, 0.8)
-            graphics.fillStyle(0xffffff, alpha)
-
-            if (shapeRoll === 1) {
-                graphics.fillRect(x, y, starSize, starSize)
-            } else if (shapeRoll === 2) {
-                graphics.fillCircle(x, y, starSize, starSize)
-            }
+    _makeStars(count) {
+        this.stars = []
+        const w = this.scale.width, h = this.scale.height
+        for (let i = 0; i < count; i++) {
+            const sz = Math.random() < 0.3 ? 2 : 1
+            const s = this.add.rectangle(
+                Math.random() * w, Math.random() * h,
+                sz, sz, 0xffffff, 0.3 + Math.random() * 0.6
+            )
+            this.stars.push({ obj: s, speed: 0.3 + Math.random() * 0.8 })
         }
-
-        graphics.generateTexture(key, w, h)
-        graphics.destroy()
     }
 }

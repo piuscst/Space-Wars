@@ -366,6 +366,8 @@ class Boss1 extends Entity {
     spawnBullet(x, y, dx, dy) {
         const bullet = new EnemyBullet(this.scene, x, y, dx, dy, 2)
         this.bullets.push(bullet)
+        this.scene.sound.play("sfxLaser", { volume: 0.15, rate: 0.7 })  // lower/deeper than player
+
     }
 
     updateBullets(delta) {

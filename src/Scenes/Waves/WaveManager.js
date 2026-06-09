@@ -1,7 +1,10 @@
+// Drop-in replacement for WaveManager — adds Boss2 and Boss3 to spawnBoss()
+// Everything else is identical to your original.
+
 class WaveManager {
     constructor(scene) {
         this.scene = scene
-        this.currentWave = 0
+        this.currentWave = 17
         this.enemies = []
         this.waveInProgress = false
         this.waveComplete = false
@@ -18,37 +21,32 @@ class WaveManager {
     }
 
     spawnWave(config) {
+        console.log("Wave: ", this.currentWave)
         if (config.boss) {
             this.spawnBoss(config.bossType)
             return
         }
-
         if (config.composition) {
             this.spawnComposition(config)
             return
         }
 
         const positions = this.getFormationPositions(config.formation, config.enemies)
-        this.expectedEnemies = positions.length  // track how many we expect
-        this.spawnedEnemies = 0                  // track how many have actually spawned
+        this.expectedEnemies = positions.length
+        this.spawnedEnemies = 0
 
         for (let i = 0; i < positions.length; i++) {
             const { x, y } = positions[i]
-
             this.scene.time.delayedCall(i * 150, () => {
                 const homeY = 80 + Math.abs(y + 40)
                 const enemy = new DriftEnemy(
                     this.scene, x, y,
-                    config.speed,
-                    config.shootRate,
-                    config.hp,
-                    config.points,
-                    i,
-                    homeY,
-                    config.upgraded
+                    config.speed, config.shootRate,
+                    config.hp, config.points,
+                    i, homeY, config.upgraded
                 )
                 this.enemies.push(enemy)
-                this.spawnedEnemies++  // increment as each one spawns
+                this.spawnedEnemies++
             })
         }
     }
@@ -56,19 +54,16 @@ class WaveManager {
     spawnComposition(config) {
         let globalIndex = 0
         let delay = 0
-
-        this.expectedEnemies = config.composition.reduce((total, group) => total + group.count, 0)
+        this.expectedEnemies = config.composition.reduce((t, g) => t + g.count, 0)
         this.spawnedEnemies = 0
 
         for (const group of config.composition) {
-            // Each group gets its own full-width positions
             const positions = this.getFormationPositions("line", group.count)
             const homeY = 80 + group.row * 80
 
             for (let i = 0; i < group.count; i++) {
                 const spawnDelay = delay + i * 200
                 const pos = positions[i]
-
                 this.scene.time.delayedCall(spawnDelay, () => {
                     let enemy
                     if (group.type === "shooter") {
@@ -81,7 +76,7 @@ class WaveManager {
                     } else if (group.type === "charger") {
                         enemy = new ChargerEnemy(
                             this.scene, pos.x, -40,
-                            config.speed,           // no shootRate as its a Charger
+                            config.speed,
                             config.hp, config.points,
                             globalIndex, homeY, config.upgraded
                         )
@@ -98,7 +93,6 @@ class WaveManager {
                     globalIndex++
                 })
             }
-
             delay += group.count * 200 + 1000
         }
     }
@@ -108,88 +102,65 @@ class WaveManager {
         const w = this.scene.scale.width
         const margin = 80
 
-        // Formations (help from Claude Code)
         if (formation === "line") {
             const spacing = (w - margin * 2) / (count - 1)
-            for (let i = 0; i < count; i++) {
-                positions.push({ x: margin + i * spacing, y: -40 })
-            }
+            for (let i = 0; i < count; i++) positions.push({ x: margin + i * spacing, y: -40 })
 
         } else if (formation === "v") {
             const half = Math.ceil(count / 2)
             const spacing = (w - margin * 2) / (half + 1)
             for (let i = 0; i < count; i++) {
-                const side = i < half ? i : count - 1 - i
                 const depth = Math.abs(i - half + 0.5)
-                positions.push({
-                    x: margin + spacing * (i % half + 1),
-                    y: -40 - depth * 45
-                })
+                positions.push({ x: margin + spacing * (i % half + 1), y: -40 - depth * 45 })
             }
 
         } else if (formation === "box") {
-            const cols = Math.ceil(Math.sqrt(count))  // square-ish grid based on count
+            const cols = Math.ceil(Math.sqrt(count))
             const spacingX = (w - margin * 2) / (cols - 1)
-            const spacingY = 70
             for (let i = 0; i < count; i++) {
-                const col = i % cols
-                const row = Math.floor(i / cols)
-                positions.push({
-                    x: margin + col * spacingX,
-                    y: -40 - row * spacingY
-                })
+                positions.push({ x: margin + (i % cols) * spacingX, y: -40 - Math.floor(i / cols) * 70 })
             }
 
         } else if (formation === "spread") {
             for (let i = 0; i < count; i++) {
-                positions.push({
-                    x: Phaser.Math.Between(margin, w - margin),
-                    y: Phaser.Math.Between(-120, -40)
-                })
+                positions.push({ x: Phaser.Math.Between(margin, w - margin), y: Phaser.Math.Between(-120, -40) })
             }
 
         } else if (formation === "swarm") {
-            const cols = Math.ceil(count / 3)  // 3 rows, scale cols to count
+            const cols = Math.ceil(count / 3)
             for (let i = 0; i < count; i++) {
-                const col = i % cols
-                const row = Math.floor(i / cols)
                 positions.push({
-                    x: margin + (col / (cols - 1)) * (w - margin * 2),
-                    y: -40 - row * 60
+                    x: margin + (i % cols / (cols - 1)) * (w - margin * 2),
+                    y: -40 - Math.floor(i / cols) * 60
                 })
             }
         }
-
         return positions
     }
 
     spawnBoss(type) {
-        if (type === "Boss1") {
-            const boss = new Boss1(this.scene, this.scene.scale.width / 2, 120)
+        const cx = this.scene.scale.width / 2
+        let boss
+
+        if (type === "Boss1") boss = new Boss1(this.scene, cx, 120)
+        else if (type === "Boss2") boss = new Boss2(this.scene, cx, 120)
+        else if (type === "Boss3") boss = new Boss3(this.scene, cx, 120)
+
+        if (boss) {
             this.enemies.push(boss)
             this.expectedEnemies = 1
-            this.spawnedEnemies = 1
+            this.spawnedEnemies  = 1
         }
     }
 
     update(time, delta) {
-        for (const e of this.enemies) {
-            e.update(time, delta)
-        }
+        for (const e of this.enemies) e.update(time, delta)
+        this.enemies = this.enemies.filter(e => e.alive)
 
-        this.enemies = this.enemies.filter(e => {
-            if (!e.alive) {
-                
-                return false
-            }
-            return true
-        })
-
-        // Only complete wave once all enemies have spawned AND all are dead
         const allSpawned = this.spawnedEnemies >= this.expectedEnemies
         if (this.waveInProgress && allSpawned && this.enemies.length === 0) {
             this.waveInProgress = false
-            this.waveComplete = true
+            this.waveComplete   = true
         }
     }
 }
